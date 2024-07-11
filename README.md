@@ -1,14 +1,50 @@
 # GitHub Events Dashboard
+
 A dashboard application to visualize GitHub events.
 
+## Features
+
+- View recent GitHub events
+- Filter events by type
+- Display event details
+
 ## Installation
-Instructions on how to install and run the project.
+
+1. Clone the repository:
+    ```bash
+    git clone https://github.com/swapnil12348/github_events_dashboard.git
+    cd github_events_dashboard
+    ```
+
+2. Create a virtual environment and activate it:
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+    ```
+
+3. Install the required packages:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4. Run the application:
+    ```bash
+    flask run
+    ```
 
 ## Usage
-Examples of how to use the project.
+
+1. Open your web browser and go to `http://127.0.0.1:5000`.
+2. Interact with the dashboard to view and filter GitHub events.
 
 ## Contributing
-Guidelines for contributing to the project.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/new-feature`)
+3. Commit your changes (`git commit -m 'Add some feature'`)
+4. Push to the branch (`git push origin feature/new-feature`)
+5. Open a Pull Request
 
 ## License
-Information about the project's license.
+
+This project is licensed under the MIT License.
