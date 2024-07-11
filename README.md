@@ -37,13 +37,6 @@ A dashboard application to visualize GitHub events.
 1. Open your web browser and go to `http://127.0.0.1:5000`.
 2. Interact with the dashboard to view and filter GitHub events.
 
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/new-feature`)
-3. Commit your changes (`git commit -m 'Add some feature'`)
-4. Push to the branch (`git push origin feature/new-feature`)
-5. Open a Pull Request
 
 ## License
 
