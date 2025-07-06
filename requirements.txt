@@ -1,0 +1,13 @@
+# -- Flask Framework and Extensions --
+Flask
+Flask-SQLAlchemy
+Flask-Login
+Flask-Cors
+
+# -- Database Driver --
+# Required to connect to the Vercel Postgres database
+psycopg2-binary
+
+# -- Environment Variable Management --
+# For loading the .env file during local development
+python-dotenv

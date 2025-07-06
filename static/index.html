@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Events Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .arrow-up::after { content: ' ▲'; }
+        .arrow-down::after { content: ' ▼'; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="app" class="container mx-auto p-4">
+        <h1 class="text-3xl font-bold mb-4">GitHub Events Dashboard</h1>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="bg-white p-4 rounded shadow">
+                <h2 class="text-xl font-semibold mb-2">Event Types Distribution</h2>
+                <canvas id="eventTypesChart"></canvas>
+            </div>
+            <div class="bg-white p-4 rounded shadow">
+                <h2 class="text-xl font-semibold mb-2">Top Repositories</h2>
+                <canvas id="topReposChart"></canvas>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded shadow mb-4">
+            <h2 class="text-xl font-semibold mb-2">Filters</h2>
+            <input v-model="searchQuery" placeholder="Search..." class="border p-2 mr-2">
+            <select v-model="selectedEventType" class="border p-2 mr-2">
+                <option value="">All Event Types</option>
+                <option v-for="type in eventTypes" :key="type" :value="type">{{ type }}</option>
+            </select>
+            <select v-model="selectedRepo" class="border p-2 mr-2">
+                <option value="">All Repositories</option>
+                <option v-for="repo in repos" :key="repo" :value="repo">{{ repo }}</option>
+            </select>
+            <select v-model="selectedUser" class="border p-2 mr-2">
+                <option value="">All Users</option>
+                <option v-for="user in users" :key="user" :value="user">{{ user }}</option>
+            </select>
+        </div>
+
+        <div class="bg-white p-4 rounded shadow mb-4">
+            <h2 class="text-xl font-semibold mb-2">Add New Event</h2>
+            <input v-model="newEvent.type" placeholder="Event Type" class="border p-2 mr-2">
+            <input v-model="newEvent.actor.login" placeholder="User" class="border p-2 mr-2">
+            <input v-model="newEvent.repo.name" placeholder="Repository" class="border p-2 mr-2">
+            <button @click="createEvent" class="bg-blue-500 text-white px-4 py-2 rounded">Add Event</button>
+        </div>
+
+        <div class="bg-white p-4 rounded shadow">
+            <h2 class="text-xl font-semibold mb-2">Events List</h2>
+            <table class="w-full">
+                <thead>
+                    <tr>
+                        <th @click="setSorting('type')" class="text-left cursor-pointer">
+                            Type
+                            <span v-if="sortBy === 'type'" :class="{ 'arrow-up': !sortDesc, 'arrow-down': sortDesc }"></span>
+                        </th>
+                        <th @click="setSorting('actor.login')" class="text-left cursor-pointer">
+                            Actor
+                            <span v-if="sortBy === 'actor.login'" :class="{ 'arrow-up': !sortDesc, 'arrow-down': sortDesc }"></span>
+                        </th>
+                        <th @click="setSorting('repo.name')" class="text-left cursor-pointer">
+                            Repo
+                            <span v-if="sortBy === 'repo.name'" :class="{ 'arrow-up': !sortDesc, 'arrow-down': sortDesc }"></span>
+                        </th>
+                        <th @click="setSorting('created_at')" class="text-left cursor-pointer">
+                            Created At
+                            <span v-if="sortBy === 'created_at'" :class="{ 'arrow-up': !sortDesc, 'arrow-down': sortDesc }"></span>
+                        </th>
+                        <th class="text-left">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="event in paginatedEvents" :key="event.id">
+                        <td>{{ event.type }}</td>
+                        <td>{{ event.actor.login }}</td>
+                        <td>{{ event.repo.name }}</td>
+                        <td>{{ formatDate(event.created_at) }}</td>
+                        <td>
+                            <button @click="editEvent(event)" class="bg-yellow-500 text-white px-2 py-1 rounded mr-2">Edit</button>
+                            <button @click="deleteEvent(event.id)" class="bg-red-500 text-white px-2 py-1 rounded">Delete</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="mt-4 flex justify-between items-center">
+                <div>
+                    <span class="mr-2">Page {{ currentPage }} of {{ totalPages }}</span>
+                    <button @click="prevPage" :disabled="currentPage === 1" class="bg-blue-500 text-white px-2 py-1 rounded mr-2">Previous</button>
+                    <button @click="nextPage" :disabled="currentPage === totalPages" class="bg-blue-500 text-white px-2 py-1 rounded">Next</button>
+                </div>
+                <div>
+                    <select v-model="eventsPerPage" @change="updatePagination" class="border p-2">
+                        <option :value="10">10 per page</option>
+                        <option :value="20">20 per page</option>
+                        <option :value="50">50 per page</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        new Vue({
+            el: '#app',
+            data: {
+                events: [],
+                eventTypes: [],
+                repos: [],
+                users: [],
+                selectedEventType: '',
+                selectedRepo: '',
+                selectedUser: '',
+                searchQuery: '',
+                currentPage: 1,
+                eventsPerPage: 10,
+                sortBy: 'created_at',
+                sortDesc: true,
+                newEvent: {
+                    type: '',
+                    actor: { login: '' },
+                    repo: { name: '' }
+                },
+                eventTypesChart: null,
+                topReposChart: null,
+            },
+            computed: {
+                filteredEvents() {
+                    return this.events.filter(event =>
+                        (!this.selectedEventType || event.type === this.selectedEventType) &&
+                        (!this.selectedRepo || event.repo.name === this.selectedRepo) &&
+                        (!this.selectedUser || event.actor.login === this.selectedUser) &&
+                        (this.searchQuery.trim() === '' ||
+                         event.type.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+                         event.actor.login.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+                         event.repo.name.toLowerCase().includes(this.searchQuery.toLowerCase()))
+                    );
+                },
+                sortedEvents() {
+                    const compare = (a, b) => {
+                        let valueA = this.sortBy.split('.').reduce((obj, key) => obj[key], a);
+                        let valueB = this.sortBy.split('.').reduce((obj, key) => obj[key], b);
+                        if (valueA < valueB) return this.sortDesc ? 1 : -1;
+                        if (valueA > valueB) return this.sortDesc ? -1 : 1;
+                        return 0;
+                    };
+                    return [...this.filteredEvents].sort(compare);
+                },
+                paginatedEvents() {
+                    const start = (this.currentPage - 1) * this.eventsPerPage;
+                    const end = start + this.eventsPerPage;
+                    return this.sortedEvents.slice(start, end);
+                },
+                totalPages() {
+                    return Math.ceil(this.filteredEvents.length / this.eventsPerPage);
+                }
+            },
+            methods: {
+                fetchData() {
+                    axios.get('/api/events')
+                        .then(response => {
+                            this.events = response.data;
+                            this.updateCharts();
+                        })
+                        .catch(error => console.error(error));
+
+                    axios.get('/api/events/types')
+                        .then(response => {
+                            this.eventTypes = response.data;
+                        })
+                        .catch(error => console.error(error));
+
+                    axios.get('/api/events/repos')
+                        .then(response => {
+                            this.repos = response.data;
+                        })
+                        .catch(error => console.error(error));
+
+                    axios.get('/api/events/users')
+                        .then(response => {
+                            this.users = response.data;
+                        })
+                        .catch(error => console.error(error));
+                },
+                formatDate(dateString) {
+                    return new Date(dateString).toLocaleString();
+                },
+                updateCharts() {
+                    this.updateEventTypesChart();
+                    this.updateTopReposChart();
+                },
+                updateEventTypesChart() {
+                    const ctx = document.getElementById('eventTypesChart').getContext('2d');
+                    const eventTypeCounts = {};
+                    this.events.forEach(event => {
+                        eventTypeCounts[event.type] = (eventTypeCounts[event.type] || 0) + 1;
+                    });
+                    if (this.eventTypesChart) {
+                        this.eventTypesChart.destroy();
+                    }
+                    this.eventTypesChart = new Chart(ctx, {
+                        type: 'pie',
+                        data: {
+                            labels: Object.keys(eventTypeCounts),
+                            datasets: [{
+                                data: Object.values(eventTypeCounts),
+                                backgroundColor: this.generateColors(Object.keys(eventTypeCounts).length)
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            title: {
+                                display: true,
+                                text: 'Event Types Distribution'
+                            }
+                        }
+                    });
+                },
+                updateTopReposChart() {
+                    const ctx = document.getElementById('topReposChart').getContext('2d');
+                    const repoCounts = {};
+                    this.events.forEach(event => {
+                        repoCounts[event.repo.name] = (repoCounts[event.repo.name] || 0) + 1;
+                    });
+                    const sortedRepos = Object.entries(repoCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                    if (this.topReposChart) {
+                        this.topReposChart.destroy();
+                    }
+                    this.topReposChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: sortedRepos.map(repo => repo[0]),
+                            datasets: [{
+                                label: 'Event Count',
+                                data: sortedRepos.map(repo => repo[1]),
+                                backgroundColor: this.generateColors(5)
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            title: {
+                                display: true,
+                                text: 'Top 5 Repositories'
+                            },
+                            scales: {
+                                yAxes: [{
+                                    ticks: {
+                                        beginAtZero: true
+                                    }
+                                }]
+                            }
+                        }
+                    });
+                },
+                generateColors(count) {
+                    const colors = [];
+                    for (let i = 0; i < count; i++) {
+                        colors.push(`hsl(${(i * 360) / count}, 70%, 50%)`);
+                    }
+                    return colors;
+                },
+                createEvent() {
+                    axios.post('/api/events', this.newEvent)
+                        .then(response => {
+                            this.events.push(response.data);
+                            this.newEvent = { type: '', actor: { login: '' }, repo: { name: '' } };
+                            this.updateCharts();
+                        })
+                        .catch(error => console.error(error));
+                },
+                editEvent(event) {
+                    const updatedEvent = {
+                        type: prompt('Enter new event type:', event.type),
+                        actor: { login: prompt('Enter new user:', event.actor.login) },
+                        repo: { name: prompt('Enter new repository:', event.repo.name) }
+                    };
+                    axios.put(`/api/events/${event.id}`, updatedEvent)
+                        .then(response => {
+                            const index = this.events.findIndex(e => e.id === event.id);
+                            this.events.splice(index, 1, response.data);
+                            this.updateCharts();
+                        })
+                        .catch(error => console.error(error));
+                },
+                deleteEvent(eventId) {
+                    if (confirm('Are you sure you want to delete this event?')) {
+                        axios.delete(`/api/events/${eventId}`)
+                            .then(() => {
+                                this.events = this.events.filter(e => e.id !== eventId);
+                                this.updateCharts();
+                            })
+                            .catch(error => console.error(error));
+                    }
+                },
+                setSorting(sortBy) {
+                    if (this.sortBy === sortBy) {
+                        this.sortDesc = !this.sortDesc;
+                    } else {
+                        this.sortBy = sortBy;
+                        this.sortDesc = true;
+                    }
+                },
+                prevPage() {
+                    if (this.currentPage > 1) {
+                        this.currentPage--;
+                    }
+                },
+                nextPage() {
+                    if (this.currentPage < this.totalPages) {
+                        this.currentPage++;
+                    }
+                },
+                updatePagination() {
+                    this.currentPage = 1;
+                }
+            },
+            mounted() {
+                this.fetchData();
+            }
+        });
+    </script>
+</body>
+</html>
